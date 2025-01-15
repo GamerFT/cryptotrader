@@ -79,7 +79,7 @@ class TradeAnalyzer:
 def main():
     # initialize with API key
     api_key = "b54bcf4d-1bca-4e8e-9a24-22ff2c3d462c" #testing api key
-    #api_key = "04416596-45c0-4b57-a1f3-2eb568ff144f" #real api key
+    #api_key = "xxx" #real api key
     symbols = ['BTC', 'ETH', 'SOL']  # add more symbols as needed
     
     collector = CryptoDataCollector(api_key)
