@@ -5,9 +5,29 @@ import time
 import json
 import os
 from typing import Dict, List
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import SQLAlchemyError
+
+Base = declarative_base()
+
+class DatabaseManager:
+    def __init__(self, connection_string):
+        #connection string format
+        #postgresql://username:password@host:port/database_name
+        try:
+            self.engine = create_engine(connection_string)
+            Base.metadata.create_all(self.engine)
+            Session = sessionmaker(bind=self.engine)
+            self.session = Session()
+            print("Connected to the database")
+        except Exception as e:
+            print(f"Error connecting to database: {e}")
+            raise
 
 class CryptoDataCollector:
-    def __init__(self, api_key: str):
+    def __init__(self, api_key):
         self.api_key = api_key
         #self.base_url = "https://pro-api.coinmarketcap.com/v1"
         self.base_url = "https://sandbox-api.coinmarketcap.com/v1"
@@ -16,7 +36,7 @@ class CryptoDataCollector:
             'Accept': 'application/json'
         }
 
-    def get_latest_prices(self, symbols: List[str]):
+    def get_latest_prices(self, symbols):
         #get latest prices for specified cryptocurrency symbols
         try:
             url = f"{self.base_url}/cryptocurrency/quotes/latest"
@@ -55,7 +75,7 @@ class TradeAnalyzer:
     def __init__(self, lookback_periods: int = 24):
         self.lookback_periods = lookback_periods
     
-    def analyze(self, data: pd.DataFrame) -> Dict[str, str]:
+    def analyze(self, data):
         
         #simple analysis based on price movements and volume
         #returns trading signals for each symbol
