@@ -26,6 +26,24 @@ class DatabaseManager:
             print(f"Error connecting to database: {e}")
             raise
 
+class CryptoPrice(Base):
+    __tablename__ = 'crypto_prices'
+
+    id = Column(Integer, primary_key=True)
+    symbol = Column(String(10))
+    price = Column(Float)
+    volume_24h = Column(Float)
+    percent_change_24h = Column(Float)
+    timestamp = Column(DateTime)
+
+class TradeSignal(Base):
+    __tablename__ = 'trade_signals'
+
+    id = Column(Integer, primary_key=True)
+    symbol = Column(String(10))
+    signal = Column(String(10))
+    timestamp = Column(DateTime)
+
 class CryptoDataCollector:
     def __init__(self, api_key):
         self.api_key = api_key
