@@ -4,27 +4,13 @@ from datetime import datetime
 import time
 import json
 import os
-from typing import Dict, List
+from typing import Dict, List, Optional
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 
 Base = declarative_base()
-
-class DatabaseManager:
-    def __init__(self, connection_string):
-        #connection string format
-        #postgresql://username:password@host:port/database_name
-        try:
-            self.engine = create_engine(connection_string)
-            Base.metadata.create_all(self.engine)
-            Session = sessionmaker(bind=self.engine)
-            self.session = Session()
-            print("Connected to the database")
-        except Exception as e:
-            print(f"Error connecting to database: {e}")
-            raise
 
 class CryptoPrice(Base):
     __tablename__ = 'crypto_prices'
@@ -44,6 +30,63 @@ class TradeSignal(Base):
     signal = Column(String(10))
     timestamp = Column(DateTime)
 
+class DatabaseManager:
+    def __init__(self, connection_string):
+        #connection string format
+        #postgresql://username:password@host:port/database_name
+        try:
+            self.engine = create_engine(connection_string)
+            Base.metadata.create_all(self.engine)
+            Session = sessionmaker(bind=self.engine)
+            self.session = Session()
+            print("Connected to the database")
+        except Exception as e:
+            print(f"Error connecting to database: {e}")
+            raise
+    def store_crypto_data(self,data: pd.DataFrame):
+        #store crypto price data
+        try:
+            for _, row in data.iterrows():
+                crypto_price = CryptoPrice(
+                    symbol=row['symbol'],
+                    price=row['price'],
+                    volume_24h=row['volume_24h'],
+                    percent_change_24h=row['percent_change_24h'],
+                    timestamp=row['timestamp']
+                )
+                self.session.add(crypto_price)
+            self.session.commit()
+        except SQLAlchemyError as e:
+            print(f"Error storing crypto data: {e}")
+            self.session.rollback()
+
+    def store_signals(self, signals: Dict[str, str]):
+        #stores trading signals
+        try:
+            for symbol, signal in signals.items():
+                trade_signal = TradeSignal(
+                    symbol=symbol,
+                    signal=signal,
+                    timestamp=datetime.now()
+                )
+                self.session.add(trade_signal)
+            self.session.commit()
+        except SQLAlchemyError as e:
+            print(f"Error storing signals: {e}")
+            self.session.rollback()
+    
+    def get_recent_prices(self, symbol: str, limit: int = 24):
+        #get recent price data for a symbol
+        try:
+            query = self.session.query(CryptoPrice)\
+                .filter(CryptoPrice.symbol == symbol)\
+                .order_by(CryptoPrice.timestamp.desc())\
+                .limit(limit)
+            return pd.read_sql(query.statement, self.engine)
+        except SQLAlchemyError as e:
+            print(f"Error retrieving price data: {e}")
+            return pd.DataFrame()
+            
 class CryptoDataCollector:
     def __init__(self, api_key):
         self.api_key = api_key
