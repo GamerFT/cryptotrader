@@ -133,10 +133,11 @@ class CryptoDataCollector:
             return None
 
 class TradeAnalyzer:
-    def __init__(self, lookback_periods: int = 24):
+    def __init__(self,db_manager: DatabaseManager, lookback_periods: int = 24):
         self.lookback_periods = lookback_periods
+        self.db_manager = db_manager
     
-    def analyze(self, data):
+    def analyze(self, data: pd.DataFrame):
         
         #simple analysis based on price movements and volume
         #returns trading signals for each symbol
@@ -160,38 +161,48 @@ class TradeAnalyzer:
 def main():
     # initialize with API key
     api_key = "b54bcf4d-1bca-4e8e-9a24-22ff2c3d462c" #testing api key
-    #api_key = "xxx" #real api key
+    #api_key = os.getenv('COINMARKETCAP_API_KEY') #real api key
     symbols = ['BTC', 'ETH', 'SOL']  # add more symbols as needed
+    db_connection_string = os.getenv('AWS_RDS_CONNECTION_STRING')
+    try:
+        #init
+        db_manager = DatabaseManager(db_connection_string)
+        collector = CryptoDataCollector(api_key)
+        analyzer = TradeAnalyzer(db_manager)
     
-    collector = CryptoDataCollector(api_key)
-    analyzer = TradeAnalyzer()
-    
-    while True:
-        try:
-            # collect data
-            print("\nFetching latest crypto data...")
-            data = collector.get_latest_prices(symbols)
-            
-            if data is not None:
-                # analyze and get trading signals
-                signals = analyzer.analyze(data)
+        while True:
+            try:
+                # collect data
+                print("\nFetching latest crypto data...")
+                data = collector.get_latest_prices(symbols)
                 
-                
-                print("\nCurrent Data:")
-                print(data.to_string())
-                print("\nTrading Signals:")
-                for symbol, signal in signals.items():
-                    print(f"{symbol}: {signal}")
-            
-            # wait 5 mins for update
-            time.sleep(300)
-            
-        except KeyboardInterrupt:
-            print("\nStopping data collection...")
-            break
-        except Exception as e:
-            print(f"Error in main loop: {e}")
-            time.sleep(60)  # wait 1 min before retrying
+                if data is not None:
+                    db_manager.store_crypto_data(data)
 
+                    # analyze and get trading signals
+                    signals = analyzer.analyze(data)
+                    
+                    #store signals
+                    db_manager.store_signals(signals)
+                    
+                    print("\nCurrent Data:")
+                    print(data.to_string())
+                    print("\nTrading Signals:")
+                    for symbol, signal in signals.items():
+                        print(f"{symbol}: {signal}")
+                
+                # wait 5 mins for update
+                time.sleep(300)
+                
+            except KeyboardInterrupt:
+                print("\nStopping data collection...")
+                break
+            except Exception as e:
+                print(f"Error in main loop: {e}")
+                time.sleep(60)  # wait 1 min before retrying
+    finally:
+        if 'db_manager' in locals():
+            db_manager.session.close()
+            
 if __name__ == "__main__":
     main()
