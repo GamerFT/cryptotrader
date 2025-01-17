@@ -14,17 +14,17 @@ class Base(DeclarativeBase):
 
 class CryptoPrice(Base):
     __tablename__ = 'crypto_prices'
-
+    
     id = Column(Integer, primary_key=True)
     symbol = Column(String(10))
     price = Column(Float)
     volume_24h = Column(Float)
     percent_change_24h = Column(Float)
     timestamp = Column(DateTime)
-
+    
 class TradeSignal(Base):
     __tablename__ = 'trade_signals'
-
+    
     id = Column(Integer, primary_key=True)
     symbol = Column(String(10))
     signal = Column(String(10))
@@ -42,7 +42,8 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error connecting to database: {e}")
             raise
-    def store_crypto_data(self,data: pd.DataFrame):
+
+    def store_crypto_data(self, data: pd.DataFrame):
         #store crypto price data
         with Session(self.engine) as session:
             try:
@@ -50,7 +51,8 @@ class DatabaseManager:
                     crypto_price = CryptoPrice(
                         symbol=row['symbol'],
                         price=row['price'],
-                        volume_24h=row['percent_change_24h'],
+                        volume_24h=row['volume_24h'],
+                        percent_change_24h=row['percent_change_24h'],
                         timestamp=row['timestamp']
                     )
                     session.add(crypto_price)
@@ -163,11 +165,9 @@ class TradeAnalyzer:
 def main():
     # initialize with API key
     #api_key = "b54bcf4d-1bca-4e8e-9a24-22ff2c3d462c" #testing api key
-    #api_key = os.getenv('COINMARKETCAP_API_KEY') #real api key
-    api_key = "04416596-45c0-4b57-a1f3-2eb568ff144f"
+    api_key = os.getenv('COINMARKETCAP_API_KEY') #real api key
     symbols = ['BTC', 'ETH', 'SOL']  # add more symbols as needed
-    #db_connection_string = os.getenv('AWS_RDS_CONNECTION_STRING')
-    db_connection_string = "postgresql://chris:jingsun123@cryptodatabase-1.c1uewgauu3ok.us-west-1.rds.amazonaws.com:5432/crypto"
+    db_connection_string = os.getenv('AWS_RDS_CONNECTION_STRING')
     try:
         #init
         db_manager = DatabaseManager(db_connection_string)
