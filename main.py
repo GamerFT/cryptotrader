@@ -6,11 +6,11 @@ import json
 import os
 from typing import Dict, List, Optional
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
 from sqlalchemy.exc import SQLAlchemyError
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 class CryptoPrice(Base):
     __tablename__ = 'crypto_prices'
@@ -37,52 +37,56 @@ class DatabaseManager:
         try:
             self.engine = create_engine(connection_string)
             Base.metadata.create_all(self.engine)
-            Session = sessionmaker(bind=self.engine)
-            self.session = Session()
-            print("Connected to the database")
+            self.session_factory = sessionmaker(bind=self.engine)
+            print("Successfully connected to the database")
         except Exception as e:
             print(f"Error connecting to database: {e}")
             raise
     def store_crypto_data(self,data: pd.DataFrame):
         #store crypto price data
-        try:
-            for _, row in data.iterrows():
-                crypto_price = CryptoPrice(
-                    symbol=row['symbol'],
-                    price=row['price'],
-                    volume_24h=row['volume_24h'],
-                    percent_change_24h=row['percent_change_24h'],
-                    timestamp=row['timestamp']
-                )
-                self.session.add(crypto_price)
-            self.session.commit()
-        except SQLAlchemyError as e:
-            print(f"Error storing crypto data: {e}")
-            self.session.rollback()
+        with Session(self.engine) as session:
+            try:
+                for _, row in data.iterrows():
+                    crypto_price = CryptoPrice(
+                        symbol=row['symbol'],
+                        price=row['price'],
+                        volume_24h=row['percent_change_24h'],
+                        timestamp=row['timestamp']
+                    )
+                    session.add(crypto_price)
+                session.commit()
+            except SQLAlchemyError as e:
+                print(f"Error storing crypto data: {e}")
+                session.rollback()
+                raise
+        
 
     def store_signals(self, signals: Dict[str, str]):
         #stores trading signals
-        try:
-            for symbol, signal in signals.items():
-                trade_signal = TradeSignal(
-                    symbol=symbol,
-                    signal=signal,
-                    timestamp=datetime.now()
-                )
-                self.session.add(trade_signal)
-            self.session.commit()
-        except SQLAlchemyError as e:
-            print(f"Error storing signals: {e}")
-            self.session.rollback()
+        with Session(self.engine) as session:
+            try:
+                for symbol, signal in signals.items():
+                    trade_signal = TradeSignal(
+                        symbol=symbol,
+                        signal=signal,
+                        timestamp=datetime.now()
+                    )
+                    session.add(trade_signal)
+                session.commit()
+            except SQLAlchemyError as e:
+                print(f"Error storing signals: {e}")
+                session.rollback()
+                raise
     
     def get_recent_prices(self, symbol: str, limit: int = 24):
         #get recent price data for a symbol
         try:
-            query = self.session.query(CryptoPrice)\
-                .filter(CryptoPrice.symbol == symbol)\
-                .order_by(CryptoPrice.timestamp.desc())\
-                .limit(limit)
-            return pd.read_sql(query.statement, self.engine)
+            with Session(self.engine) as session:
+                query = session.query(CryptoPrice)\
+                    .filter(CryptoPrice.symbol == symbol)\
+                    .order_by(CryptoPrice.timestamp.desc())\
+                    .limit(limit)
+                return pd.read_sql(query.statement, self.engine)
         except SQLAlchemyError as e:
             print(f"Error retrieving price data: {e}")
             return pd.DataFrame()
@@ -90,8 +94,8 @@ class DatabaseManager:
 class CryptoDataCollector:
     def __init__(self, api_key):
         self.api_key = api_key
-        #self.base_url = "https://pro-api.coinmarketcap.com/v1"
-        self.base_url = "https://sandbox-api.coinmarketcap.com/v1"
+        self.base_url = "https://pro-api.coinmarketcap.com/v1"
+        #self.base_url = "https://sandbox-api.coinmarketcap.com/v1"
         self.headers = {
             'X-CMC_PRO_API_KEY': api_key,
             'Accept': 'application/json'
@@ -134,14 +138,12 @@ class CryptoDataCollector:
 
 class TradeAnalyzer:
     def __init__(self,db_manager: DatabaseManager, lookback_periods: int = 24):
-        self.lookback_periods = lookback_periods
         self.db_manager = db_manager
+        self.lookback_periods = lookback_periods
     
     def analyze(self, data: pd.DataFrame):
         
-        #simple analysis based on price movements and volume
-        #returns trading signals for each symbol
-        
+        #analyze and generate trading signals based on price movements and volume
         signals = {}
         
         for symbol in data['symbol'].unique():
@@ -160,10 +162,12 @@ class TradeAnalyzer:
 
 def main():
     # initialize with API key
-    api_key = "b54bcf4d-1bca-4e8e-9a24-22ff2c3d462c" #testing api key
+    #api_key = "b54bcf4d-1bca-4e8e-9a24-22ff2c3d462c" #testing api key
     #api_key = os.getenv('COINMARKETCAP_API_KEY') #real api key
+    api_key = "04416596-45c0-4b57-a1f3-2eb568ff144f"
     symbols = ['BTC', 'ETH', 'SOL']  # add more symbols as needed
-    db_connection_string = os.getenv('AWS_RDS_CONNECTION_STRING')
+    #db_connection_string = os.getenv('AWS_RDS_CONNECTION_STRING')
+    db_connection_string = "postgresql://chris:jingsun123@cryptodatabase-1.c1uewgauu3ok.us-west-1.rds.amazonaws.com:5432/crypto"
     try:
         #init
         db_manager = DatabaseManager(db_connection_string)
@@ -200,9 +204,8 @@ def main():
             except Exception as e:
                 print(f"Error in main loop: {e}")
                 time.sleep(60)  # wait 1 min before retrying
-    finally:
-        if 'db_manager' in locals():
-            db_manager.session.close()
-            
+    except Exception as e:
+        print(f"Fatal error: {e}")
+
 if __name__ == "__main__":
     main()
