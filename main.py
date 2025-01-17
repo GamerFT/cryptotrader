@@ -151,7 +151,7 @@ class TradeAnalyzer:
         for symbol in data['symbol'].unique():
             coin_data = data[data['symbol'] == symbol].iloc[0]
             
-            # Simple strategy based on 24h performance and volume
+            # simple strategy based on 24h performance and volume
             if (coin_data['percent_change_24h'] > 5 and 
                 coin_data['volume_24h'] > 1000000):
                 signals[symbol] = 'BUY'
